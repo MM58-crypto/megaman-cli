@@ -39,11 +39,11 @@ void Help() {
     switch(option) {
          case 1:
             // some logic
-
+             ShowRandMM();
          case 2:
             // some logic
             //
-
+             DisplayList();
          case 3:
               break;
 
