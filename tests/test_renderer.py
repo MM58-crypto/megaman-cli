@@ -1,12 +1,16 @@
 """Black-box checks for RGBA-to-terminal boundaries; no image dependencies."""
 
+import errno
+import fcntl
 import os
 from pathlib import Path
 import re
 import struct
+import select
 import subprocess
 import sys
 import tempfile
+import termios
 import unittest
 import zlib
 
@@ -75,6 +79,67 @@ class RendererEdges(unittest.TestCase):
             [BINARY, "--sprites-dir", str(self.directory), "--no-title", *args],
             capture_output=True, text=True, encoding="utf-8", timeout=5,
             env={**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"})
+
+    def run_terminal(self, columns, rows, *args):
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        try:
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+            process = subprocess.Popen(
+                [BINARY, "--sprites-dir", str(self.directory), "--no-title", *args],
+                stdout=slave, stderr=subprocess.PIPE)
+        finally:
+            os.close(slave)
+        output = bytearray()
+        with process:
+            try:
+                while True:
+                    if not select.select([master], [], [], 5)[0]:
+                        self.fail("Renderer did not finish writing to the terminal")
+                    try:
+                        data = os.read(master, 65536)
+                    except OSError as error:
+                        if error.errno != errno.EIO:
+                            raise
+                        break
+                    if not data:
+                        break
+                    output.extend(data)
+                _, stderr = process.communicate(timeout=5)
+                self.assertEqual(process.returncode, 0, stderr.decode())
+            finally:
+                if process.poll() is None:
+                    process.kill()
+        return output.decode("utf-8")
+
+    def test_default_artwork_stays_within_fifteen_percent(self):
+        write_png(self.directory / "square.png", [[(255, 0, 0, 255)] * 32] * 32)
+        for columns, rows in [(80, 24), (40, 12), (120, 40)]:
+            with self.subTest(terminal=(columns, rows)):
+                output = self.run_terminal(columns, rows, "square")
+                pixels, _, _ = terminal_pixels(output)
+                width, height = len(pixels[0]), len(pixels) // 2
+                self.assertLessEqual(width * height * 100, columns * rows * 15)
+                self.assertLess(width, columns)
+                self.assertLess(height, rows)
+
+    def test_area_cap_includes_half_block_rounding_and_explicit_sizes(self):
+        # A continuous-area limit alone admits 27x27 pixels here, but the
+        # rounded 27x14 terminal cells exceed 15% of a 45x55 terminal.
+        for width, height, columns, rows in [(27, 27, 45, 55), (1, 67, 8, 20),
+                                              (67, 1, 80, 3), (7, 67, 20, 10)]:
+            with self.subTest(sprite=(width, height), terminal=(columns, rows)):
+                write_png(self.directory / "shape.png",
+                          [[(255, 0, 0, 255)] * width] * height)
+                output = self.run_terminal(columns, rows, "shape",
+                                           "--width", "1000", "--height", "1000")
+                pixels, _, _ = terminal_pixels(output)
+                self.assertLessEqual(len(pixels[0]) * (len(pixels) // 2) * 100,
+                                     columns * rows * 15)
+                # Scaling must retain proportions to within one sampled pixel.
+                visible_height = sum(any(pixel is not None for pixel in row) for row in pixels)
+                self.assertLessEqual(abs(len(pixels[0]) * height - visible_height * width),
+                                     max(width, height))
 
     def test_transparency_black_pixels_and_odd_last_row(self):
         red, green, blue = (255, 0, 0), (0, 255, 0), (0, 0, 255)

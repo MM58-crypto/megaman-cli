@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <charconv>
-#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -32,8 +31,8 @@ namespace fs = std::filesystem;
 struct Options {
     std::string name;
     fs::path directory;
-    int width = 40;
-    int height = 24;
+    int width = 28;
+    int height = 14;
     bool random = false;
     bool list = false;
     bool help = false;
@@ -102,12 +101,13 @@ void printHelp() {
                  "  -r, --random            Display a random sprite\n"
                  "  -n, --name NAME         Display a PNG filename without its extension\n"
                  "  -l, --list              List available sprite names\n"
-                 "  -w, --width COLUMNS     Maximum artwork width (default: 40)\n"
-                 "      --height ROWS       Maximum artwork height (default: 24)\n"
+                 "  -w, --width COLUMNS     Maximum artwork width (default: 28)\n"
+                 "      --height ROWS       Maximum artwork height (default: 14)\n"
                  "      --no-title          Display only the artwork\n"
                  "      --sprites-dir DIR   Use PNGs from this directory\n"
                  "  -h, --help              Show this help\n\n"
-                 "Sizes preserve aspect ratio and shrink to fit an attached terminal.\n"
+                 "Sizes preserve aspect ratio; artwork uses at most 15% of terminal cells.\n"
+                 "Size limits cannot override this cap. Unknown terminal size uses 80x24.\n"
                  "Requires a UTF-8 terminal with ANSI 24-bit color support.\n"
                  "MEGAMAN_SPRITES_DIR sets the asset directory unless --sprites-dir is used.\n";
 }
@@ -264,25 +264,52 @@ struct Size {
 };
 
 Size renderSize(const Bounds &bounds, const Options &options) {
-    int columns = options.width;
-    int rows = options.height;
+    int terminalColumns = 80;
+    int terminalRows = 24;
     winsize terminal{};
     if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal) == 0) {
         if (terminal.ws_col > 0) {
-            // Leave one column to avoid wrapping on terminals with delayed autowrap.
-            columns = std::min(columns, std::max(1, static_cast<int>(terminal.ws_col) - 1));
+            terminalColumns = terminal.ws_col;
         }
         if (terminal.ws_row > 0) {
-            rows = std::min(
-                rows, std::max(1, static_cast<int>(terminal.ws_row) - (options.title ? 2 : 1)));
+            terminalRows = terminal.ws_row;
         }
+    }
+    // Leave one column to avoid delayed autowrap, plus title/prompt rows.
+    const int columns = std::min(options.width, std::max(1, terminalColumns - 1));
+    const int rows =
+        std::min(options.height, std::max(1, terminalRows - (options.title ? 2 : 1)));
+    const auto cellBudget = static_cast<std::int64_t>(terminalColumns) * terminalRows * 15 / 100;
+    if (cellBudget == 0) {
+        throw std::runtime_error("terminal too small to display a sprite within the 15% area limit");
     }
     const int width = bounds.right - bounds.left;
     const int height = bounds.bottom - bounds.top;
-    const double scale =
-        std::min(static_cast<double>(columns) / width, static_cast<double>(rows * 2) / height);
-    return {std::max(1, static_cast<int>(std::floor(width * scale))),
-            std::max(1, static_cast<int>(std::floor(height * scale)))};
+    const int longest = std::max(width, height);
+    const auto sizeAt = [&](int pixels) -> Size {
+        return {std::max(1, pixels * width / longest),
+                std::max(1, pixels * height / longest)};
+    };
+    const auto fits = [&](const Size &size) {
+        // Count the last half-block as a full terminal row, even for odd heights.
+        return static_cast<std::int64_t>(size.width) * ((size.height + 1) / 2) <= cellBudget;
+    };
+    int low = 1;
+    int high = std::min(columns * longest / width, rows * 2 * longest / height);
+    const Size maximum = sizeAt(high);
+    if (fits(maximum)) {
+        return maximum;
+    }
+    // Find the largest proportional integer-pixel size within the cell budget.
+    while (low < high) {
+        const int middle = low + (high - low + 1) / 2;
+        if (fits(sizeAt(middle))) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    return sizeAt(low);
 }
 
 int sample(const Image &image, const Bounds &bounds, const Size &size, int x, int y) {

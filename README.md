@@ -39,7 +39,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 CMake registers these checks when Python 3 is available. They exercise rendered
-pixel colors/transparency, padding, odd image heights, and corrupt PNG input.
+pixel colors/transparency, padding, odd image heights, corrupt PNG input, and
+the 15% artwork-area limit on pseudo-terminals (including explicit size requests).
 
 ## Usage
 
@@ -48,6 +49,8 @@ pixel colors/transparency, padding, odd image heights, and corrupt PNG input.
 ./build/megaman-cli --list                   # Available PNG names
 ./build/megaman-cli --name x4_x_ultimate_idle
 ./build/megaman-cli x4_black_zero_saber
+./build/megaman-cli x1_sigma_saber
+./build/megaman-cli x1_storm_eagle_wings --no-title
 ./build/megaman-cli x5_falcon_flight --width 60 --height 30
 ./build/megaman-cli x4_iris_stand --no-title
 ./build/megaman-cli --help
@@ -58,8 +61,8 @@ pixel colors/transparency, padding, odd image heights, and corrupt PNG input.
 | `-r`, `--random` | Display one random sprite; also the default action |
 | `-n`, `--name NAME` or positional `NAME` | Select a filename without `.png` |
 | `-l`, `--list` | List all available names without color escapes |
-| `-w`, `--width COLUMNS` | Maximum artwork width, default 40 |
-| `--height ROWS` | Maximum artwork height, default 24 |
+| `-w`, `--width COLUMNS` | Maximum artwork width, default 28; subject to the 15% area cap |
+| `--height ROWS` | Maximum artwork height, default 14; subject to the 15% area cap |
 | `--no-title` | Omit the sprite name |
 | `--sprites-dir DIR` | Read PNGs from a different directory |
 | `-h`, `--help` | Show help without loading any assets |
@@ -71,10 +74,19 @@ standard error and return a nonzero exit status.
 The renderer trims transparent padding, scales with nearest-neighbor sampling,
 and packs two vertical image pixels into each terminal cell. Width and height
 are bounding limits, not independent stretching controls; proportions are
-preserved apart from integer-pixel rounding. Artwork shrinks to the terminal's
-reported size, reserving space for the title and following prompt. Size values
-must be integers from 1 to 1000. PNGs are limited to 8192 pixels per axis and
-16 megapixels decoded.
+preserved apart from integer-pixel rounding. The default 28-column by 14-row
+bounding box keeps sprites small to medium. Artwork also shrinks so its bounding
+rectangle occupies **at most 15% of the terminal's total cells**: artwork columns
+times artwork rows, including transparent cells and the final half-block row.
+The optional title is not part of that artwork area. `--width` and `--height`
+cannot override this cap; smaller requested limits are still honored.
+
+The renderer uses the attached terminal's reported dimensions, leaving one column
+to avoid wrapping and reserving rows for the title and following prompt. Unknown
+dimensions, including redirected output, use an 80-column by 24-row fallback.
+A terminal too small to fit even one artwork cell within 15% reports an error.
+Size values must be integers from 1 to 1000. PNGs are limited to 8192 pixels per
+axis and 16 megapixels decoded.
 
 ANSI cells cannot represent partial opacity: alpha below 128 is transparent;
 alpha at least 128 uses the original RGB color. Transparent pixels keep your
@@ -146,16 +158,34 @@ falling back to unrelated assets.
 
 ## Sprite collection and credits
 
-The collection contains the 12 originally supplied PNGs plus these 11 additional
-poses. **Falcon Armor is from Mega Man X5, not X4.**
+The collection contains **29 PNGs**: the 12 originally supplied images plus these
+17 additional poses. **Falcon Armor is from Mega Man X5, not X4.**
 
 | Game / character | Added CLI names |
 | --- | --- |
+| X1 Sigma | `x1_sigma_cape`, `x1_sigma_saber` |
+| X1 Chill Penguin | `x1_chill_penguin_idle`, `x1_chill_penguin_jump` |
+| X1 Storm Eagle | `x1_storm_eagle_idle`, `x1_storm_eagle_wings` |
 | X4 Ultimate Armor X | `x4_x_ultimate_idle`, `x4_x_ultimate_dash`, `x4_x_ultimate_nova_strike` |
 | X4 Iris | `x4_iris_stand`, `x4_iris_float` |
 | X4 Black Zero | `x4_black_zero_idle`, `x4_black_zero_run`, `x4_black_zero_saber` |
 | X5 Falcon Armor X | `x5_falcon_idle`, `x5_falcon_shoot`, `x5_falcon_flight` |
 
+- **Sigma:** ripped by **Eureka Drama X**; hosted by
+  [Sprite Database](https://spritedatabase.net/file/19523)
+  ([source sheet](https://spritedatabase.net/files/snes/464/Sprite/MMX_Sigma.png)).
+  Native caped and saber-swing frames from Mega Man X (SNES), preserving the
+  source PNG's transparency and the complete saber arc.
+- **Chill Penguin:** sheet credits **Blarcox**; contributed to
+  [Sprite Database by Freedom Fighter](https://spritedatabase.net/file/8187)
+  ([source sheet](https://spritedatabase.net/files/snes/464/Sprite/ChillPenguin.gif)).
+  Native standing and airborne frames from Mega Man X (SNES). Only the exact
+  green sheet background, RGB `(152, 224, 155)`, was made transparent.
+- **Storm Eagle:** ripped and contributed by **Freedom Fighter**; hosted by
+  [Sprite Database](https://spritedatabase.net/file/8197)
+  ([source sheet](https://spritedatabase.net/files/snes/464/Sprite/StormEagle.gif)).
+  Native standing and raised-wing frames from Mega Man X (SNES). Only the exact
+  pink sheet background, RGB `(222, 160, 160)`, was made transparent.
 - **Ultimate Armor X:** ripped by **NIK**, who requests credit; hosted by
   [Sprite Database](https://spritedatabase.net/file/5029)
   ([source sheet](https://spritedatabase.net/files/ps1/879/Sprite/X4-UltimateArmor.PNG)).
@@ -182,7 +212,8 @@ poses. **Falcon Armor is from Mega Man X5, not X4.**
 No individual ripper credit was identified on the accessible Sprites INC sheets
 or pages above. The original 12 PNGs were supplied with this project; their
 original sources were not recorded here. All added poses were extracted without
-resampling; Black Zero and Falcon images have a one-pixel transparent margin.
+resampling; Black Zero, Falcon, and all six X1 boss images have a one-pixel
+transparent margin.
 
 **Artwork rights:** Mega Man characters and original game graphics belong to
 Capcom. Archive/ripper attribution is not permission from the copyright holder.
