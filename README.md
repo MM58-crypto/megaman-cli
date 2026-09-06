@@ -39,8 +39,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 CMake registers these checks when Python 3 is available. They exercise rendered
-pixel colors/transparency, padding, odd image heights, corrupt PNG input, and
-the 15% artwork-area limit on pseudo-terminals (including explicit size requests).
+pixel colors/transparency, detail-preserving downsampling, sharp enlargement,
+padding, odd image heights, corrupt PNG input, and the 15% artwork-area limit
+on pseudo-terminals (including explicit size requests).
 
 ## Usage
 
@@ -71,9 +72,13 @@ Names match exactly first, then case-insensitively if unambiguous. Selection,
 listing, and explicit random selection are mutually exclusive. Errors go to
 standard error and return a nonzero exit status.
 
-The renderer trims transparent padding, scales with nearest-neighbor sampling,
-and packs two vertical image pixels into each terminal cell. Width and height
-are bounding limits, not independent stretching controls; proportions are
+The renderer trims transparent padding, uses area-averaged sampling when shrinking,
+and packs two vertical image pixels into each terminal cell. This reduces jagged
+edges and retains contributions from fine details that nearest-neighbor sampling
+would skip. Native-size and enlarged sprites still use nearest-neighbor sampling
+to keep their palette and sharp edges. The fixed ANSI cell grid still limits
+fine detail; no sprite replacements or terminal configuration changes are needed.
+Width and height are bounding limits, not independent stretching controls; proportions are
 preserved apart from integer-pixel rounding. The default 28-column by 14-row
 bounding box keeps sprites small to medium. Artwork also shrinks so its bounding
 rectangle occupies **at most 15% of the terminal's total cells**: artwork columns
@@ -88,9 +93,12 @@ A terminal too small to fit even one artwork cell within 15% reports an error.
 Size values must be integers from 1 to 1000. PNGs are limited to 8192 pixels per
 axis and 16 megapixels decoded.
 
-ANSI cells cannot represent partial opacity: alpha below 128 is transparent;
-alpha at least 128 uses the original RGB color. Transparent pixels keep your
-terminal's default background, and colors are reset after every row. Opaque
+ANSI cells cannot represent partial opacity: source alpha below 128 is transparent;
+alpha at least 128 contributes its RGB color. When shrinking, each output pixel
+averages visible source colors weighted by their overlapping area and is shown
+only when at least half its source footprint is visible. Hidden RGB never tints
+the result. Transparent pixels keep your terminal's default background, and colors
+are reset after every row. Opaque
 black remains black. Existing opaque artwork, including the blue/green backdrop
 in `X_nova_strike_blue.png`, is rendered as supplied rather than guessing which
 colors should be removed. Output retains ANSI colors when redirected to a file.

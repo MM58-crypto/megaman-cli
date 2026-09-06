@@ -173,6 +173,38 @@ class RendererEdges(unittest.TestCase):
         pixels, _, _ = terminal_pixels(result.stdout)
         self.assertEqual(pixels, [[red[:3], blue[:3]], [None, None]])
 
+    def test_downsampling_retains_detail_between_sample_centers(self):
+        red, blue, green = (255, 0, 0, 255), (0, 0, 255, 255), (0, 255, 0, 255)
+        stripe = [red, red, blue, green, green]
+        for vertical in (False, True):
+            with self.subTest(vertical=vertical):
+                rows = [[color] * 2 for color in stripe] if vertical else [stripe] * 2
+                write_png(self.directory / "detail.png", rows)
+                result = self.run_cli("detail", "--width", "1" if vertical else "2",
+                                      "--height", "1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                pixels, _, _ = terminal_pixels(result.stdout)
+                left, right = (204, 0, 51), (0, 204, 51)
+                self.assertEqual(pixels, [[left], [right]] if vertical
+                                 else [[left, right], [None, None]])
+
+    def test_downsampling_ignores_hidden_rgb_and_preserves_half_coverage(self):
+        red, clear = (255, 0, 0, 128), (0, 255, 0, 127)
+        stripe = [red, clear, red, red, clear, clear, clear, red]
+        write_png(self.directory / "coverage.png", [stripe] * 2)
+        result = self.run_cli("coverage", "--width", "4", "--height", "1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pixels, _, _ = terminal_pixels(result.stdout)
+        self.assertEqual(pixels, [[red[:3], red[:3], None, red[:3]], [None] * 4])
+
+    def test_upscaling_keeps_pixel_art_sharp(self):
+        red, blue = (255, 0, 0, 255), (0, 0, 255, 255)
+        write_png(self.directory / "small.png", [[red, blue]])
+        result = self.run_cli("small", "--width", "3", "--height", "1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pixels, _, _ = terminal_pixels(result.stdout)
+        self.assertEqual(pixels, [[red[:3], blue[:3], blue[:3]], [None] * 3])
+
     def test_corrupt_png_fails_without_partial_artwork(self):
         (self.directory / "broken.png").write_bytes(b"not a PNG")
         result = self.run_cli("broken")

@@ -316,14 +316,55 @@ int sample(const Image &image, const Bounds &bounds, const Size &size, int x, in
     if (y >= size.height) {
         return -1;
     }
-    // Sample pixel centers; nearest-neighbor keeps palette colors and sharp edges.
+    const int sourceWidth = bounds.right - bounds.left;
+    const int sourceHeight = bounds.bottom - bounds.top;
+    if (size.width < sourceWidth || size.height < sourceHeight) {
+        // Integrate each output pixel's footprint instead of discarding fine details.
+        // Coordinates are scaled by the output dimensions for exact overlap weights.
+        const int left = x * sourceWidth;
+        const int right = (x + 1) * sourceWidth;
+        const int top = y * sourceHeight;
+        const int bottom = (y + 1) * sourceHeight;
+        const int endX = (right + size.width - 1) / size.width;
+        const int endY = (bottom + size.height - 1) / size.height;
+        std::int64_t coverage = 0;
+        std::int64_t red = 0, green = 0, blue = 0;
+        for (int sy = top / size.height; sy < endY; ++sy) {
+            const int overlapY = std::min(bottom, (sy + 1) * size.height) -
+                                 std::max(top, sy * size.height);
+            for (int sx = left / size.width; sx < endX; ++sx) {
+                const unsigned char *pixel = image.at(bounds.left + sx, bounds.top + sy);
+                // Keep the existing alpha cutoff; hidden RGB must not tint edges.
+                if (pixel[3] < 128) {
+                    continue;
+                }
+                const int overlapX = std::min(right, (sx + 1) * size.width) -
+                                     std::max(left, sx * size.width);
+                const auto weight = static_cast<std::int64_t>(overlapX) * overlapY;
+                coverage += weight;
+                red += pixel[0] * weight;
+                green += pixel[1] * weight;
+                blue += pixel[2] * weight;
+            }
+        }
+        // Half-blocks have binary opacity. Retain at least half-covered pixels,
+        // averaging visible colors only so the terminal background remains untouched.
+        if (coverage * 2 < static_cast<std::int64_t>(sourceWidth) * sourceHeight) {
+            return -1;
+        }
+        const auto channel = [coverage](std::int64_t sum) {
+            return static_cast<int>((sum + coverage / 2) / coverage);
+        };
+        return (channel(red) << 16) | (channel(green) << 8) | channel(blue);
+    }
+    // Native-size and enlarged pixel art keep their original palette and sharp edges.
     const int sourceX =
         bounds.left +
-        static_cast<int>((static_cast<std::int64_t>(2 * x + 1) * (bounds.right - bounds.left)) /
+        static_cast<int>((static_cast<std::int64_t>(2 * x + 1) * sourceWidth) /
                          (2 * size.width));
     const int sourceY =
         bounds.top +
-        static_cast<int>((static_cast<std::int64_t>(2 * y + 1) * (bounds.bottom - bounds.top)) /
+        static_cast<int>((static_cast<std::int64_t>(2 * y + 1) * sourceHeight) /
                          (2 * size.height));
     const unsigned char *pixel = image.at(sourceX, sourceY);
     if (pixel[3] < 128) {
