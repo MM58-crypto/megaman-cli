@@ -1,5 +1,6 @@
 """Black-box checks for RGBA-to-terminal boundaries; no image dependencies."""
 
+import base64
 import errno
 import fcntl
 import os
@@ -74,20 +75,25 @@ class RendererEdges(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
 
-    def run_cli(self, *args):
+    def run_cli(self, *args, outline=False):
         return subprocess.run(
-            [BINARY, "--sprites-dir", str(self.directory), "--no-title", *args],
+            [BINARY, "--sprites-dir", str(self.directory), "--no-title",
+             *([] if outline else ["--no-outline"]), *args],
             capture_output=True, text=True, encoding="utf-8", timeout=5,
             env={**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"})
 
-    def run_terminal(self, columns, rows, *args):
+    def run_terminal(self, columns, rows, *args, cell=(0, 0), term="xterm-256color",
+                     environment=None):
         master, slave = os.openpty()
         self.addCleanup(os.close, master)
         try:
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+            fcntl.ioctl(slave, termios.TIOCSWINSZ,
+                        struct.pack("HHHH", rows, columns, columns * cell[0], rows * cell[1]))
             process = subprocess.Popen(
                 [BINARY, "--sprites-dir", str(self.directory), "--no-title", *args],
-                stdout=slave, stderr=subprocess.PIPE)
+                stdout=slave, stderr=subprocess.PIPE,
+                env={**{key: value for key, value in os.environ.items()
+                        if key not in ("TMUX", "STY")}, "TERM": term, **(environment or {})})
         finally:
             os.close(slave)
         output = bytearray()
@@ -112,34 +118,134 @@ class RendererEdges(unittest.TestCase):
                     process.kill()
         return output.decode("utf-8")
 
-    def test_default_artwork_stays_within_fifteen_percent(self):
-        write_png(self.directory / "square.png", [[(255, 0, 0, 255)] * 32] * 32)
-        for columns, rows in [(80, 24), (40, 12), (120, 40)]:
-            with self.subTest(terminal=(columns, rows)):
-                output = self.run_terminal(columns, rows, "square")
-                pixels, _, _ = terminal_pixels(output)
-                width, height = len(pixels[0]), len(pixels) // 2
-                self.assertLessEqual(width * height * 100, columns * rows * 15)
-                self.assertLess(width, columns)
-                self.assertLess(height, rows)
+    def test_native_detail_is_not_shrunk_to_an_area_budget(self):
+        red = (255, 0, 0, 255)
+        blue = (0, 0, 255, 255)
+        rows = [[blue if x == y else red for x in range(35)] for y in range(49)]
+        write_png(self.directory / "native.png", rows)
+        output = self.run_terminal(80, 30, "native", "--no-outline")
+        pixels, _, _ = terminal_pixels(output)
+        self.assertEqual(pixels, [[color[:3] for color in row] for row in rows]
+                         + [[None] * 35])
 
-    def test_area_cap_includes_half_block_rounding_and_explicit_sizes(self):
-        # A continuous-area limit alone admits 27x27 pixels here, but the
-        # rounded 27x14 terminal cells exceed 15% of a 45x55 terminal.
-        for width, height, columns, rows in [(27, 27, 45, 55), (1, 67, 8, 20),
-                                              (67, 1, 80, 3), (7, 67, 20, 10)]:
+    def test_compact_graphics_preserve_every_source_pixel(self):
+        red, blue, clear = (255, 0, 0, 255), (0, 0, 255, 255), (90, 80, 70, 0)
+        rows = [[blue if x == y else clear if x == 17 else red
+                 for x in range(35)] for y in range(49)]
+        write_png(self.directory / "native.png", rows)
+        output = self.run_terminal(80, 30, "native", "--no-outline",
+                                   cell=(10, 20), term="xterm-kitty")
+        width, height, rgba = self.graphics_pixels(output)
+        # Same one-pixel diagonal and transparency in half the physical footprint.
+        self.assertLessEqual(width, 35 * 10 // 2)
+        self.assertLessEqual(height, 49 * 10 // 2)
+        scale = width // 35
+        self.assertGreaterEqual(scale, 1)
+        expected = b"".join(
+            b"".join(bytes(color if color[3] else (0, 0, 0, 0)) * scale for color in row)
+            * scale for row in rows)
+        self.assertEqual((width, height, rgba), (35 * scale, 49 * scale, expected))
+
+    def graphics_pixels(self, output):
+        chunks = re.findall(r"\x1b_G([^;]*);([A-Za-z0-9+/=]*)\x1b\\", output)
+        self.assertTrue(chunks, "Expected a Kitty image, not oversized text blocks")
+        headers = [dict(item.split("=") for item in header.split(",")) for header, _ in chunks]
+        self.assertEqual(headers[0]["f"], "32")
+        self.assertEqual(headers[0]["q"], "2")  # No protocol replies in the next shell prompt.
+        self.assertEqual([header["m"] for header in headers], ["1"] * (len(chunks) - 1) + ["0"])
+        self.assertTrue(all(len(data) <= 4096 and len(data) % 4 == 0 for _, data in chunks))
+        data = base64.b64decode("".join(data for _, data in chunks), validate=True)
+        width, height = int(headers[0]["s"]), int(headers[0]["v"])
+        self.assertEqual(len(data), width * height * 4)
+        return width, height, data
+
+    def test_graphics_limits_include_outline_without_blending(self):
+        red = (255, 0, 0, 255)
+        write_png(self.directory / "square.png", [[red] * 8] * 8)
+        output = self.run_terminal(80, 30, "square", "--width", "2", "--height", "1",
+                                   cell=(10, 20), term="xterm-kitty")
+        width, height, data = self.graphics_pixels(output)
+        self.assertLessEqual(width, 20)
+        self.assertLessEqual(height, 20)
+        black, clear = bytes((0, 0, 0, 255)), bytes(4)
+        # Two device pixels per source pixel, plus a one-device-pixel contour.
+        edge = clear + black * 16 + clear
+        self.assertEqual((width, height, data),
+                         (18, 18, edge + (black + bytes(red) * 16 + black) * 16 + edge))
+
+    def test_ansi_fallback_without_usable_graphics(self):
+        red = (255, 0, 0, 255)
+        write_png(self.directory / "single.png", [[red]])
+        for args, cell, term, environment in [
+            (("--ansi",), (10, 20), "xterm-kitty", {}),
+            ((), (0, 0), "xterm-kitty", {}),
+            ((), (10, 20), "xterm-256color", {}),
+            ((), (10, 20), "xterm-kitty", {"TMUX": "/tmp/example"}),
+            ((), (10, 20), "xterm-kitty", {"STY": "example"}),
+        ]:
+            with self.subTest(args=args, cell=cell, term=term, environment=environment):
+                output = self.run_terminal(80, 30, "single", "--no-outline", *args,
+                                           cell=cell, term=term, environment=environment)
+                self.assertEqual(terminal_pixels(output)[0], [[red[:3]], [None]])
+
+    def test_terminal_fit_includes_outline_and_half_block_rounding(self):
+        for width, height, columns, rows in [(27, 27, 30, 15), (1, 67, 8, 20),
+                                           (67, 1, 80, 4), (7, 67, 20, 10)]:
             with self.subTest(sprite=(width, height), terminal=(columns, rows)):
                 write_png(self.directory / "shape.png",
                           [[(255, 0, 0, 255)] * width] * height)
                 output = self.run_terminal(columns, rows, "shape",
                                            "--width", "1000", "--height", "1000")
                 pixels, _, _ = terminal_pixels(output)
-                self.assertLessEqual(len(pixels[0]) * (len(pixels) // 2) * 100,
-                                     columns * rows * 15)
-                # Scaling must retain proportions to within one sampled pixel.
-                visible_height = sum(any(pixel is not None for pixel in row) for row in pixels)
-                self.assertLessEqual(abs(len(pixels[0]) * height - visible_height * width),
+                self.assertLess(len(pixels[0]), columns)
+                self.assertLess(len(pixels) // 2, rows)
+                content = [[pixel for pixel in row if pixel == (255, 0, 0)]
+                           for row in pixels]
+                content_height = sum(bool(row) for row in content)
+                content_width = max(map(len, content))
+                self.assertLessEqual(abs(content_width * height - content_height * width),
                                      max(width, height))
+
+    def test_outline_is_one_pixel_and_preserves_original_colors(self):
+        red, blue, clear = (255, 0, 0, 255), (0, 0, 255, 255), (90, 80, 70, 0)
+        write_png(self.directory / "edge.png", [
+            [red, clear, clear],
+            [red, blue, clear],
+            [clear, clear, red],
+        ])
+        result = self.run_cli("edge", outline=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pixels, foreground, background = terminal_pixels(result.stdout)
+        black, r, b = (0, 0, 0), red[:3], blue[:3]
+        self.assertEqual(pixels, [
+            [None, black, None, None, None],
+            [black, r, black, None, None],
+            [black, r, b, black, None],
+            [None, black, black, r, black],
+            [None, None, None, black, None],
+            [None] * 5,
+        ])
+        self.assertIsNone(foreground)
+        self.assertIsNone(background)
+
+    def test_outline_respects_explicit_limits_when_shrinking(self):
+        write_png(self.directory / "square.png", [[(255, 0, 0, 255)] * 8] * 8)
+        result = self.run_cli("square", "--width", "5", "--height", "3", outline=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pixels, _, _ = terminal_pixels(result.stdout)
+        black, red = (0, 0, 0), (255, 0, 0)
+        self.assertEqual(pixels, [[None, black, black, black, None]]
+                         + [[black, red, red, red, black]] * 3
+                         + [[None, black, black, black, None], [None] * 5])
+
+    def test_impossible_outline_limits_fail_before_artwork(self):
+        write_png(self.directory / "tiny.png", [[(255, 0, 0, 255)]])
+        result = self.run_cli("tiny", "--width", "2", outline=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertTrue(result.stderr)
+        unoutlined = self.run_cli("tiny", "--width", "2")
+        self.assertEqual(unoutlined.returncode, 0, unoutlined.stderr)
 
     def test_transparency_black_pixels_and_odd_last_row(self):
         red, green, blue = (255, 0, 0), (0, 255, 0), (0, 0, 255)
@@ -173,37 +279,31 @@ class RendererEdges(unittest.TestCase):
         pixels, _, _ = terminal_pixels(result.stdout)
         self.assertEqual(pixels, [[red[:3], blue[:3]], [None, None]])
 
-    def test_downsampling_retains_detail_between_sample_centers(self):
+    def test_downsampling_keeps_source_palette(self):
         red, blue, green = (255, 0, 0, 255), (0, 0, 255, 255), (0, 255, 0, 255)
-        stripe = [red, red, blue, green, green]
-        for vertical in (False, True):
-            with self.subTest(vertical=vertical):
-                rows = [[color] * 2 for color in stripe] if vertical else [stripe] * 2
-                write_png(self.directory / "detail.png", rows)
-                result = self.run_cli("detail", "--width", "1" if vertical else "2",
-                                      "--height", "1")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                pixels, _, _ = terminal_pixels(result.stdout)
-                left, right = (204, 0, 51), (0, 204, 51)
-                self.assertEqual(pixels, [[left], [right]] if vertical
-                                 else [[left, right], [None, None]])
+        write_png(self.directory / "detail.png", [[red, red, blue, green, green]] * 2)
+        result = self.run_cli("detail", "--width", "2", "--height", "1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pixels, _, _ = terminal_pixels(result.stdout)
+        self.assertEqual(pixels, [[red[:3], green[:3]], [None, None]])
 
-    def test_downsampling_ignores_hidden_rgb_and_preserves_half_coverage(self):
+    def test_downsampling_keeps_alpha_cutoff_without_color_bleeding(self):
         red, clear = (255, 0, 0, 128), (0, 255, 0, 127)
         stripe = [red, clear, red, red, clear, clear, clear, red]
         write_png(self.directory / "coverage.png", [stripe] * 2)
         result = self.run_cli("coverage", "--width", "4", "--height", "1")
         self.assertEqual(result.returncode, 0, result.stderr)
         pixels, _, _ = terminal_pixels(result.stdout)
-        self.assertEqual(pixels, [[red[:3], red[:3], None, red[:3]], [None] * 4])
+        self.assertEqual(pixels, [[None, red[:3], None, red[:3]], [None] * 4])
 
-    def test_upscaling_keeps_pixel_art_sharp(self):
+    def test_enlargement_uses_equal_sized_source_pixel_blocks(self):
         red, blue = (255, 0, 0, 255), (0, 0, 255, 255)
-        write_png(self.directory / "small.png", [[red, blue]])
-        result = self.run_cli("small", "--width", "3", "--height", "1")
+        write_png(self.directory / "small.png", [[red, blue], [blue, red]])
+        result = self.run_cli("small", "--width", "7", "--height", "5")
         self.assertEqual(result.returncode, 0, result.stderr)
         pixels, _, _ = terminal_pixels(result.stdout)
-        self.assertEqual(pixels, [[red[:3], blue[:3], blue[:3]], [None] * 3])
+        self.assertEqual(pixels, [[red[:3]] * 3 + [blue[:3]] * 3] * 3
+                         + [[blue[:3]] * 3 + [red[:3]] * 3] * 3)
 
     def test_corrupt_png_fails_without_partial_artwork(self):
         (self.directory / "broken.png").write_bytes(b"not a PNG")

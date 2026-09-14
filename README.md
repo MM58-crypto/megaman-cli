@@ -1,8 +1,8 @@
 # Mega Man CLI
 
-Display Mega Man sprites as ANSI truecolor pixel art in a UTF-8 terminal. Written
-in C++17; uses libpng to decode the images. No image viewer, Python, network
-connection, or terminal-specific graphics protocol is needed at runtime.
+Display Mega Man sprites as compact, sharp pixel art in Kitty, with ANSI truecolor
+text output for other UTF-8 terminals. Written in C++17; uses libpng to decode the
+images. No external image viewer, Python, or network connection is needed at runtime.
 
 Running the command without arguments prints a random sprite and exits—there is
 no interactive menu, so it can be used in a shell startup file.
@@ -38,10 +38,9 @@ Optional renderer edge-case checks (requires Python 3, standard library only):
 ctest --test-dir build --output-on-failure
 ```
 
-CMake registers these checks when Python 3 is available. They exercise rendered
-pixel colors/transparency, detail-preserving downsampling, sharp enlargement,
-padding, odd image heights, corrupt PNG input, and the 15% artwork-area limit
-on pseudo-terminals (including explicit size requests).
+CMake registers these checks when Python 3 is available. They exercise native
+pixel fidelity, palette-preserving reduction, whole-number enlargement, thin
+outlines, transparency, terminal fit, odd image heights, and corrupt PNG input.
 
 ## Usage
 
@@ -62,9 +61,11 @@ on pseudo-terminals (including explicit size requests).
 | `-r`, `--random` | Display one random sprite; also the default action |
 | `-n`, `--name NAME` or positional `NAME` | Select a filename without `.png` |
 | `-l`, `--list` | List all available names without color escapes |
-| `-w`, `--width COLUMNS` | Maximum artwork width, default 28; subject to the 15% area cap |
-| `--height ROWS` | Maximum artwork height, default 14; subject to the 15% area cap |
+| `-w`, `--width COLUMNS` | Maximum artwork width, including outline; default is compact in Kitty, native-size ANSI elsewhere |
+| `--height ROWS` | Maximum artwork height, including outline; explicit limits allow whole-number enlargement |
 | `--no-title` | Omit the sprite name |
+| `--no-outline` | Keep the original sprite edges without the added black contour |
+| `--ansi` | Force ANSI half-block output, including in Kitty |
 | `--sprites-dir DIR` | Read PNGs from a different directory |
 | `-h`, `--help` | Show help without loading any assets |
 
@@ -72,36 +73,46 @@ Names match exactly first, then case-insensitively if unambiguous. Selection,
 listing, and explicit random selection are mutually exclusive. Errors go to
 standard error and return a nonzero exit status.
 
-The renderer trims transparent padding, uses area-averaged sampling when shrinking,
-and packs two vertical image pixels into each terminal cell. This reduces jagged
-edges and retains contributions from fine details that nearest-neighbor sampling
-would skip. Native-size and enlarged sprites still use nearest-neighbor sampling
-to keep their palette and sharp edges. The fixed ANSI cell grid still limits
-fine detail; no sprite replacements or terminal configuration changes are needed.
-Width and height are bounding limits, not independent stretching controls; proportions are
-preserved apart from integer-pixel rounding. The default 28-column by 14-row
-bounding box keeps sprites small to medium. Artwork also shrinks so its bounding
-rectangle occupies **at most 15% of the terminal's total cells**: artwork columns
-times artwork rows, including transparent cells and the final half-block row.
-The optional title is not part of that artwork area. `--width` and `--height`
-cannot override this cap; smaller requested limits are still honored.
+The renderer trims transparent padding. **Kitty displays the sprite at roughly
+half the ANSI width and height without discarding source pixels.** Each source
+pixel becomes a smaller, equally sized square of device pixels. The image is
+scaled with nearest-neighbor sampling before transmission, so Kitty displays it
+at its exact device-pixel size without smoothing.
+
+Automatic graphics output requires `TERM=xterm-kitty`, stdout attached to a
+terminal, and usable pixel dimensions from that terminal. Other terminals,
+tmux/screen sessions, missing pixel dimensions, and redirected output use the
+existing ANSI renderer. `--ansi` explicitly selects that renderer. ANSI uses two
+vertical pixels per cell and keeps native detail when space permits; making it
+smaller at the same font size necessarily discards detail.
+
+A one-output-pixel black contour separates opaque pixels from terminal
+wallpapers; source colors are never replaced. In Kitty the contour is one device
+pixel thick. Use `--no-outline` for the original edges. Diagonal corners remain
+transparent rather than creating a rectangular halo.
+
+**No color averaging or smoothing is used.** Whole-number enlargement keeps
+source pixels equally sized. Width and height are bounding limits, not stretching
+controls; supplying either enables the largest whole-number scale that fits
+**both** the requested limits and the terminal, including the outline. Without
+explicit limits, Kitty uses the compact scale and ANSI does not enlarge.
+If even one device pixel per source pixel cannot fit (or one ANSI output pixel
+in text mode), nearest-neighbor reduction fits the bounds but can discard small
+features. Very small explicit limits therefore cannot guarantee lossless detail.
 
 The renderer uses the attached terminal's reported dimensions, leaving one column
 to avoid wrapping and reserving rows for the title and following prompt. Unknown
 dimensions, including redirected output, use an 80-column by 24-row fallback.
-A terminal too small to fit even one artwork cell within 15% reports an error.
-Size values must be integers from 1 to 1000. PNGs are limited to 8192 pixels per
-axis and 16 megapixels decoded.
+Limits too small for an outlined pixel report an error; use `--no-outline` or
+larger limits. Size arguments must be integers from 1 to 1000. PNGs are limited to
+8192 pixels per axis and 16 megapixels decoded.
 
 ANSI cells cannot represent partial opacity: source alpha below 128 is transparent;
-alpha at least 128 contributes its RGB color. When shrinking, each output pixel
-averages visible source colors weighted by their overlapping area and is shown
-only when at least half its source footprint is visible. Hidden RGB never tints
-the result. Transparent pixels keep your terminal's default background, and colors
-are reset after every row. Opaque
-black remains black. Existing opaque artwork, including the blue/green backdrop
-in `X_nova_strike_blue.png`, is rendered as supplied rather than guessing which
-colors should be removed. Output retains ANSI colors when redirected to a file.
+alpha at least 128 contributes its exact RGB color. Hidden RGB never tints the
+result. Transparent pixels keep your terminal's default background, and colors
+are reset after every row. Opaque black remains black. Custom opaque image
+backgrounds are rendered as supplied; the renderer does not guess which colors
+to remove. Output retains ANSI colors when redirected to a file.
 
 ## Install and use on shell startup
 
@@ -146,9 +157,10 @@ No startup files are modified by the build or installation.
 Put individual PNG poses, not whole sprite sheets, in `mm-sprites/pngs/` during
 development and rerun installation to copy additions into an installed setup.
 The filename stem becomes the CLI name. Transparent, tightly cropped,
-native-resolution pixel art gives the best results. Original supplied assets
-and filenames are retained; the old shell-style files outside `pngs/` are not
-executed or used by the renderer.
+native-resolution pixel art gives the best results. The legacy enlarged,
+anti-aliased PNGs have been replaced in place with native game frames; their CLI
+names still work. The old shell-style files outside `pngs/` are not executed or
+used by the renderer.
 
 You can also use any PNG directory without rebuilding:
 
@@ -166,10 +178,11 @@ falling back to unrelated assets.
 
 ## Sprite collection and credits
 
-The collection contains **29 PNGs**: the 12 originally supplied images plus these
-17 additional poses. **Falcon Armor is from Mega Man X5, not X4.**
+The collection contains **29 native-resolution PNGs**. The 12 legacy filenames
+now hold original game frames rather than enlarged, anti-aliased artwork.
+**Falcon Armor is from Mega Man X5, not X4.**
 
-| Game / character | Added CLI names |
+| Game / character | CLI names |
 | --- | --- |
 | X1 Sigma | `x1_sigma_cape`, `x1_sigma_saber` |
 | X1 Chill Penguin | `x1_chill_penguin_idle`, `x1_chill_penguin_jump` |
@@ -217,11 +230,46 @@ The collection contains **29 PNGs**: the 12 originally supplied images plus thes
   Native idle, shooting, and flight poses, preserving source colors and
   transparency. Shooting/flight effects are included.
 
+### Replacement frames under legacy names
+
+- **`X_1`, `X_2`:** native X4 raised-fist victory and idle frames from
+  [Sprites INC's base X sheet](https://sprites-inc.com/files/X/X/X4-X6/mmx_x4_x_sheet.gif).
+  Original GIF transparency is preserved; the victory frame replaces the old
+  raised-arm artwork.
+- **`X_fourth_armor`, `X_nova_strike`, `X_nova_strike_blue`,
+  `X_shoot_charged_armor`:** native Fourth Armor frames from
+  [Sprites INC's X4 sheet](https://sprites-inc.com/files/X/X/Armors/X4/x4sheet3fourth.gif).
+  Original GIF transparency is preserved. The gold Nova Strike includes its
+  complete trailing effect; the charged shot includes its charge-release ring.
+  `X_nova_strike_blue` now uses the game's blue spinning Nova startup frame,
+  not the old recolored active effect or its opaque rectangular background.
+- **`X_ultimate_armor`, `X_shoot_charged_u_armor`:** native idle and charged-shot
+  frames from **NIK's**
+  [Ultimate Armor sheet](https://spritedatabase.net/files/ps1/879/Sprite/X4-UltimateArmor.PNG),
+  hosted by [Sprite Database](https://spritedatabase.net/file/5029). NIK requests
+  credit. Only exact black sheet-background pixels were made transparent; the
+  charged frame's transparency and dark details also match
+  [Sprites INC's reference](https://sprites-inc.com/files/X/X/Armors/Ultimate/ultimate_armor_x.gif).
+  The full charge-release ring is retained.
+- **`Zero_1`, `Zero_2`:** Mega Man Zero (GBA), not X-series Zero.
+  [Sprites INC standard Zero archive](https://sprites-inc.com/sprite.php?local=/Zero/Zero/Standard/)
+  ([source sheet](https://sprites-inc.com/files/Zero/Zero/Standard/zero_z1standardframes.gif)).
+  Distinct standing/recovery and bent-knee combat-ready frames; the original
+  GIF transparency is preserved. These replace the old enlarged poses, so the
+  stance and ponytail position differ slightly.
+- **`zero_x4`:** native X4 arrival/ready frame from the
+  [Zero pose sheet](https://sprites-inc.com/files/X/Zero/X4-X5/zerox4sheet.gif),
+  preserving its original transparency and normal Zero palette.
+- **`dr_light`:** native blue hologram from the
+  [Sprites INC X4–X6 Dr. Light archive](https://sprites-inc.com/sprite.php?local=X/Light/X4-X6/)
+  ([source sheet](https://sprites-inc.com/files/X/Light/X4-X6/mmx_drlight_x456.png)).
+  Original PNG transparency is preserved.
+
 No individual ripper credit was identified on the accessible Sprites INC sheets
-or pages above. The original 12 PNGs were supplied with this project; their
-original sources were not recorded here. All added poses were extracted without
-resampling; Black Zero, Falcon, and all six X1 boss images have a one-pixel
-transparent margin.
+or pages above. Replacement frames are extracted without resampling, recoloring, or mirroring
+to match old artwork. All 12 replacements, Black Zero, Falcon, and all six X1
+boss images have a one-pixel transparent margin. The renderer crops this padding
+before sizing and adding its own optional outline.
 
 **Artwork rights:** Mega Man characters and original game graphics belong to
 Capcom. Archive/ripper attribution is not permission from the copyright holder.

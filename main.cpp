@@ -31,12 +31,14 @@ namespace fs = std::filesystem;
 struct Options {
     std::string name;
     fs::path directory;
-    int width = 28;
-    int height = 14;
+    int width = 0;
+    int height = 0;
     bool random = false;
     bool list = false;
     bool help = false;
     bool title = true;
+    bool outline = true;
+    bool ansi = false;
 };
 
 int positiveNumber(std::string_view value, std::string_view option) {
@@ -78,6 +80,10 @@ Options parseOptions(int argc, char *argv[]) {
             options.directory = value();
         } else if (arg == "--no-title") {
             options.title = false;
+        } else if (arg == "--no-outline") {
+            options.outline = false;
+        } else if (arg == "--ansi") {
+            options.ansi = true;
         } else if (!arg.empty() && arg.front() != '-') {
             if (!options.name.empty()) {
                 throw std::runtime_error("select only one sprite");
@@ -101,14 +107,18 @@ void printHelp() {
                  "  -r, --random            Display a random sprite\n"
                  "  -n, --name NAME         Display a PNG filename without its extension\n"
                  "  -l, --list              List available sprite names\n"
-                 "  -w, --width COLUMNS     Maximum artwork width (default: 28)\n"
-                 "      --height ROWS       Maximum artwork height (default: 14)\n"
+                 "  -w, --width COLUMNS     Maximum artwork width, including outline\n"
+                 "      --height ROWS       Maximum artwork height, including outline\n"
                  "      --no-title          Display only the artwork\n"
+                 "      --no-outline        Preserve the original sprite edges\n"
+                 "      --ansi              Use text blocks instead of Kitty graphics\n"
                  "      --sprites-dir DIR   Use PNGs from this directory\n"
                  "  -h, --help              Show this help\n\n"
-                 "Sizes preserve aspect ratio; artwork uses at most 15% of terminal cells.\n"
-                 "Size limits cannot override this cap. Unknown terminal size uses 80x24.\n"
-                 "Requires a UTF-8 terminal with ANSI 24-bit color support.\n"
+                 "Default: compact, sharp pixels in Kitty; native-size ANSI elsewhere.\n"
+                 "Kitty uses roughly half-size pixels without discarding sprite detail.\n"
+                 "Explicit sizes allow integer enlargement; colors are never blended.\n"
+                 "Sizes preserve aspect ratio and fit the terminal (80x24 if unknown).\n"
+                 "ANSI output requires UTF-8 and 24-bit color support.\n"
                  "MEGAMAN_SPRITES_DIR sets the asset directory unless --sprites-dir is used.\n";
 }
 
@@ -263,109 +273,79 @@ struct Size {
     int height;
 };
 
-Size renderSize(const Bounds &bounds, const Options &options) {
-    int terminalColumns = 80;
-    int terminalRows = 24;
+struct Terminal {
+    int columns = 80;
+    int rows = 24;
+    int cellWidth = 1;
+    int cellHeight = 2;
+    bool graphics = false;
+};
+
+Terminal terminalSize(const Options &options) {
+    Terminal result;
     winsize terminal{};
     if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal) == 0) {
         if (terminal.ws_col > 0) {
-            terminalColumns = terminal.ws_col;
+            result.columns = terminal.ws_col;
         }
         if (terminal.ws_row > 0) {
-            terminalRows = terminal.ws_row;
+            result.rows = terminal.ws_row;
+        }
+        const char *term = std::getenv("TERM");
+        if (!options.ansi && term && std::string_view(term) == "xterm-kitty" &&
+            !std::getenv("TMUX") && !std::getenv("STY") &&
+            terminal.ws_col > 0 && terminal.ws_row > 0 &&
+            terminal.ws_xpixel >= terminal.ws_col && terminal.ws_ypixel >= terminal.ws_row) {
+            result.cellWidth = terminal.ws_xpixel / terminal.ws_col;
+            result.cellHeight = terminal.ws_ypixel / terminal.ws_row;
+            result.graphics = true;
         }
     }
+    return result;
+}
+
+Size renderSize(const Bounds &bounds, const Options &options, const Terminal &terminal) {
     // Leave one column to avoid delayed autowrap, plus title/prompt rows.
-    const int columns = std::min(options.width, std::max(1, terminalColumns - 1));
-    const int rows =
-        std::min(options.height, std::max(1, terminalRows - (options.title ? 2 : 1)));
-    const auto cellBudget = static_cast<std::int64_t>(terminalColumns) * terminalRows * 15 / 100;
-    if (cellBudget == 0) {
-        throw std::runtime_error("terminal too small to display a sprite within the 15% area limit");
+    int columns = terminal.columns - 1;
+    int rows = terminal.rows - (options.title ? 2 : 1);
+    if (options.width != 0) {
+        columns = std::min(columns, options.width);
+    }
+    if (options.height != 0) {
+        rows = std::min(rows, options.height);
+    }
+    const int border = options.outline ? 2 : 0;
+    const int availableWidth = columns * terminal.cellWidth - border;
+    const int availableHeight = rows * terminal.cellHeight - border;
+    if (availableWidth < 1 || availableHeight < 1) {
+        throw std::runtime_error(
+            "terminal or size limits too small for artwork; try --no-outline or larger limits");
     }
     const int width = bounds.right - bounds.left;
     const int height = bounds.bottom - bounds.top;
     const int longest = std::max(width, height);
-    const auto sizeAt = [&](int pixels) -> Size {
-        return {std::max(1, pixels * width / longest),
-                std::max(1, pixels * height / longest)};
-    };
-    const auto fits = [&](const Size &size) {
-        // Count the last half-block as a full terminal row, even for odd heights.
-        return static_cast<std::int64_t>(size.width) * ((size.height + 1) / 2) <= cellBudget;
-    };
-    int low = 1;
-    int high = std::min(columns * longest / width, rows * 2 * longest / height);
-    const Size maximum = sizeAt(high);
-    if (fits(maximum)) {
-        return maximum;
+    const int pixels =
+        std::min(availableWidth * longest / width, availableHeight * longest / height);
+    if (pixels >= longest) {
+        // Graphics pack smaller, square device-pixel blocks into each text cell.
+        const int defaultScale = terminal.graphics
+            ? std::max(1, std::min(terminal.cellWidth / 2, terminal.cellHeight / 4)) : 1;
+        const int scale = options.width != 0 || options.height != 0
+            ? pixels / longest : std::min(defaultScale, pixels / longest);
+        return {width * scale, height * scale};
     }
-    // Find the largest proportional integer-pixel size within the cell budget.
-    while (low < high) {
-        const int middle = low + (high - low + 1) / 2;
-        if (fits(sizeAt(middle))) {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    return sizeAt(low);
+    return {std::max(1, pixels * width / longest), std::max(1, pixels * height / longest)};
 }
 
 int sample(const Image &image, const Bounds &bounds, const Size &size, int x, int y) {
-    if (y >= size.height) {
-        return -1;
-    }
     const int sourceWidth = bounds.right - bounds.left;
     const int sourceHeight = bounds.bottom - bounds.top;
-    if (size.width < sourceWidth || size.height < sourceHeight) {
-        // Integrate each output pixel's footprint instead of discarding fine details.
-        // Coordinates are scaled by the output dimensions for exact overlap weights.
-        const int left = x * sourceWidth;
-        const int right = (x + 1) * sourceWidth;
-        const int top = y * sourceHeight;
-        const int bottom = (y + 1) * sourceHeight;
-        const int endX = (right + size.width - 1) / size.width;
-        const int endY = (bottom + size.height - 1) / size.height;
-        std::int64_t coverage = 0;
-        std::int64_t red = 0, green = 0, blue = 0;
-        for (int sy = top / size.height; sy < endY; ++sy) {
-            const int overlapY = std::min(bottom, (sy + 1) * size.height) -
-                                 std::max(top, sy * size.height);
-            for (int sx = left / size.width; sx < endX; ++sx) {
-                const unsigned char *pixel = image.at(bounds.left + sx, bounds.top + sy);
-                // Keep the existing alpha cutoff; hidden RGB must not tint edges.
-                if (pixel[3] < 128) {
-                    continue;
-                }
-                const int overlapX = std::min(right, (sx + 1) * size.width) -
-                                     std::max(left, sx * size.width);
-                const auto weight = static_cast<std::int64_t>(overlapX) * overlapY;
-                coverage += weight;
-                red += pixel[0] * weight;
-                green += pixel[1] * weight;
-                blue += pixel[2] * weight;
-            }
-        }
-        // Half-blocks have binary opacity. Retain at least half-covered pixels,
-        // averaging visible colors only so the terminal background remains untouched.
-        if (coverage * 2 < static_cast<std::int64_t>(sourceWidth) * sourceHeight) {
-            return -1;
-        }
-        const auto channel = [coverage](std::int64_t sum) {
-            return static_cast<int>((sum + coverage / 2) / coverage);
-        };
-        return (channel(red) << 16) | (channel(green) << 8) | channel(blue);
-    }
-    // Native-size and enlarged pixel art keep their original palette and sharp edges.
     const int sourceX =
         bounds.left +
-        static_cast<int>((static_cast<std::int64_t>(2 * x + 1) * sourceWidth) /
-                         (2 * size.width));
+        static_cast<int>((static_cast<std::int64_t>(2 * x + 1) * sourceWidth) / (2 * size.width));
     const int sourceY =
         bounds.top +
-        static_cast<int>((static_cast<std::int64_t>(2 * y + 1) * sourceHeight) /
-                         (2 * size.height));
+        static_cast<int>((static_cast<std::int64_t>(2 * y + 1) * sourceHeight) / (2 * size.height));
     const unsigned char *pixel = image.at(sourceX, sourceY);
     if (pixel[3] < 128) {
         return -1;
@@ -392,16 +372,100 @@ void appendColor(std::string &output, int color, bool foreground, int &previous)
     }
 }
 
-void render(const Image &image, const Bounds &bounds, const Size &size) {
+void renderKitty(const std::vector<int> &pixels, int width, int height, int cellHeight) {
+    const int rows = (height + cellHeight - 1) / cellHeight;
+    // Reserve space first so an image near the bottom is not clipped on placement.
+    std::cout << "\033[0m\r";
+    for (int row = 0; row < rows; ++row) {
+        std::cout << '\n';
+    }
+    std::cout << "\033[" << rows << "A"
+              << "\033_Ga=T,f=32,q=2,C=1,s=" << width << ",v=" << height << ',';
+
+    // Stream RGBA as base64 in protocol-sized chunks; no expanded byte copy.
+    constexpr char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    char chunk[4096];
+    int length = 0;
+    const auto flush = [&](bool more) {
+        std::cout << "m=" << (more ? 1 : 0) << ';';
+        std::cout.write(chunk, length);
+        std::cout << "\033\\";
+        length = 0;
+        if (more) {
+            std::cout << "\033_G";
+        }
+    };
+    const auto append = [&](char value) {
+        chunk[length++] = value;
+        if (length == sizeof(chunk)) {
+            flush(true);
+        }
+    };
+    std::uint32_t buffer = 0;
+    int bits = 0;
+    for (int color : pixels) {
+        const std::uint32_t rgba = color < 0 ? 0 :
+            (static_cast<std::uint32_t>(color) << 8) | 255;
+        for (int shift : {24, 16, 8, 0}) {
+            buffer = (buffer << 8) | ((rgba >> shift) & 255);
+            bits += 8;
+            while (bits >= 6) {
+                bits -= 6;
+                append(alphabet[(buffer >> bits) & 63]);
+            }
+        }
+    }
+    if (bits != 0) {
+        append(alphabet[(buffer << (6 - bits)) & 63]);
+    }
+    while (length % 4 != 0) {
+        append('=');
+    }
+    flush(false);
+    // C=1 suppresses Kitty cursor movement; q=2 prevents replies reaching the shell.
+    std::cout << "\033[" << rows << "B\r";
+}
+
+void render(const Image &image, const Bounds &bounds, const Size &size, bool outline,
+            const Terminal &terminal) {
+    const int border = outline ? 1 : 0;
+    const int width = size.width + 2 * border;
+    const int height = size.height + 2 * border;
+    std::vector<int> pixels(static_cast<std::size_t>(width) * height, -1);
+    for (int y = 0; y < size.height; ++y) {
+        for (int x = 0; x < size.width; ++x) {
+            pixels[(y + border) * width + x + border] = sample(image, bounds, size, x, y);
+        }
+    }
+    if (outline) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const int index = y * width + x;
+                if (pixels[index] == -1 && ((x > 0 && pixels[index - 1] >= 0) ||
+                                            (x + 1 < width && pixels[index + 1] >= 0) ||
+                                            (y > 0 && pixels[index - width] >= 0) ||
+                                            (y + 1 < height && pixels[index + width] >= 0))) {
+                    // Keep new outline pixels negative so they cannot grow more outline.
+                    pixels[index] = -2;
+                }
+            }
+        }
+        std::replace(pixels.begin(), pixels.end(), -2, 0);
+    }
+    if (terminal.graphics) {
+        renderKitty(pixels, width, height, terminal.cellHeight);
+        return;
+    }
     std::string line;
-    line.reserve(static_cast<std::size_t>(size.width) * 48 + 16);
-    for (int y = 0; y < size.height; y += 2) {
+    line.reserve(static_cast<std::size_t>(width) * 48 + 16);
+    for (int y = 0; y < height; y += 2) {
         line = "\033[0m";
         int foreground = -1;
         int background = -1;
-        for (int x = 0; x < size.width; ++x) {
-            const int upper = sample(image, bounds, size, x, y);
-            const int lower = sample(image, bounds, size, x, y + 1);
+        for (int x = 0; x < width; ++x) {
+            const int upper = pixels[y * width + x];
+            const int lower = y + 1 < height ? pixels[(y + 1) * width + x] : -1;
             if (upper < 0 && lower < 0) {
                 appendColor(line, -1, false, background);
                 line += ' ';
@@ -438,11 +502,12 @@ int main(int argc, char *argv[]) {
             const fs::path &path = selectSprite(sprites, options.name);
             const Image image = loadImage(path);
             const Bounds bounds = visibleBounds(image);
-            const Size size = renderSize(bounds, options);
+            const Terminal terminal = terminalSize(options);
+            const Size size = renderSize(bounds, options, terminal);
             if (options.title) {
                 std::cout << path.stem().string() << '\n';
             }
-            render(image, bounds, size);
+            render(image, bounds, size, options.outline, terminal);
         }
         std::cout.flush();
         return std::cout ? 0 : 1;
