@@ -7,6 +7,24 @@ images. No external image viewer, Python, or network connection is needed at run
 Running the command without arguments prints a random sprite and exits—there is
 no interactive menu, so it can be used in a shell startup file.
 
+## Terminal preview
+
+A few of the included poses, captured from the CLI's Kitty graphics output and
+placed on a solid dark background. Your terminal's font size and background
+affect the final appearance; other terminals use ANSI half-blocks instead.
+
+| Black Zero — saber slash | X — charged shot | Falcon Armor X — flight |
+| :---: | :---: | :---: |
+| ![Black Zero swinging a green energy saber](docs/images/x4_black_zero_saber.png) | ![X firing a charged shot through a golden energy ring](docs/images/X_shoot_charged_armor.png) | ![Falcon Armor X flying with a blue energy trail](docs/images/x5_falcon_flight.png) |
+
+Try these poses in your terminal:
+
+```sh
+./build/megaman-cli x4_black_zero_saber --no-title
+./build/megaman-cli X_shoot_charged_armor --no-title
+./build/megaman-cli x5_falcon_flight --no-title
+```
+
 ## Build
 
 Requirements: Linux, a C++17 compiler, CMake 3.16 or newer, and libpng development

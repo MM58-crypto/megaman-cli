@@ -25,6 +25,8 @@ install(DIRECTORY mm-sprites/pngs/
     DESTINATION "${CMAKE_INSTALL_DATADIR}/megaman-cli/sprites"
     FILES_MATCHING PATTERN "*.png" PATTERN "*.PNG")
 install(FILES README.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(DIRECTORY docs/images/ DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs/images"
+    FILES_MATCHING PATTERN "*.png")
 
 include(CTest)
 if(BUILD_TESTING)
