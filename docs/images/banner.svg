@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title description">
+  <title id="title">Mega Man CLI</title>
+  <desc id="description">Pixel art for your terminal. C++17, Kitty graphics, and ANSI truecolor. Mega Man X raises his fist against a dark blue terminal-inspired background.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="0.35">
+      <stop stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#102b42"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop stop-color="#1673a0" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#1673a0" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#72d5f4" stroke-opacity="0.07"/>
+    </pattern>
+    <linearGradient id="grid-fade">
+      <stop stop-color="white" stop-opacity="0"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <mask id="grid-mask"><rect x="640" width="640" height="420" fill="url(#grid-fade)"/></mask>
+  </defs>
+  <rect width="1280" height="420" rx="16" fill="url(#background)"/>
+  <rect x="640" width="624" height="420" fill="url(#grid)" mask="url(#grid-mask)"/>
+  <ellipse cx="1000" cy="214" rx="290" ry="210" fill="url(#halo)"/>
+  <path d="M64 0H312" stroke="#60dcff" stroke-width="6"/>
+  <path d="M312 0H368" stroke="#2d7fa4" stroke-width="6"/>
+  <g font-family="monospace" font-size="16" letter-spacing="2">
+    <path d="M65 49l9 8-9 8m17 0h12" fill="none" stroke="#60dcff" stroke-width="3"/>
+    <text x="110" y="64" fill="#9fb5ca">TERMINAL SPRITES</text>
+  </g>
+  <!-- Outlined pixel lettering keeps the wordmark independent of installed fonts. -->
+  <g shape-rendering="crispEdges">
+    <path fill="#f0f7ff" d="M64 116h11v11h-11z M108 116h11v11h-11z M64 127h11v11h-11z M75 127h11v11h-11z M97 127h11v11h-11z M108 127h11v11h-11z M64 138h11v11h-11z M86 138h11v11h-11z M108 138h11v11h-11z M64 149h11v11h-11z M86 149h11v11h-11z M108 149h11v11h-11z M64 160h11v11h-11z M108 160h11v11h-11z M64 171h11v11h-11z M108 171h11v11h-11z M64 182h11v11h-11z M108 182h11v11h-11z M130 116h11v11h-11z M141 116h11v11h-11z M152 116h11v11h-11z M163 116h11v11h-11z M174 116h11v11h-11z M130 127h11v11h-11z M130 138h11v11h-11z M130 149h11v11h-11z M141 149h11v11h-11z M152 149h11v11h-11z M163 149h11v11h-11z M130 160h11v11h-11z M130 171h11v11h-11z M130 182h11v11h-11z M141 182h11v11h-11z M152 182h11v11h-11z M163 182h11v11h-11z M174 182h11v11h-11z M207 116h11v11h-11z M218 116h11v11h-11z M229 116h11v11h-11z M240 116h11v11h-11z M196 127h11v11h-11z M196 138h11v11h-11z M196 149h11v11h-11z M218 149h11v11h-11z M229 149h11v11h-11z M240 149h11v11h-11z M196 160h11v11h-11z M240 160h11v11h-11z M196 171h11v11h-11z M240 171h11v11h-11z M207 182h11v11h-11z M218 182h11v11h-11z M229 182h11v11h-11z M273 116h11v11h-11z M284 116h11v11h-11z M295 116h11v11h-11z M262 127h11v11h-11z M306 127h11v11h-11z M262 138h11v11h-11z M306 138h11v11h-11z M262 149h11v11h-11z M273 149h11v11h-11z M284 149h11v11h-11z M295 149h11v11h-11z M306 149h11v11h-11z M262 160h11v11h-11z M306 160h11v11h-11z M262 171h11v11h-11z M306 171h11v11h-11z M262 182h11v11h-11z M306 182h11v11h-11z M372 116h11v11h-11z M416 116h11v11h-11z M372 127h11v11h-11z M383 127h11v11h-11z M405 127h11v11h-11z M416 127h11v11h-11z M372 138h11v11h-11z M394 138h11v11h-11z M416 138h11v11h-11z M372 149h11v11h-11z M394 149h11v11h-11z M416 149h11v11h-11z M372 160h11v11h-11z M416 160h11v11h-11z M372 171h11v11h-11z M416 171h11v11h-11z M372 182h11v11h-11z M416 182h11v11h-11z M449 116h11v11h-11z M460 116h11v11h-11z M471 116h11v11h-11z M438 127h11v11h-11z M482 127h11v11h-11z M438 138h11v11h-11z M482 138h11v11h-11z M438 149h11v11h-11z M449 149h11v11h-11z M460 149h11v11h-11z M471 149h11v11h-11z M482 149h11v11h-11z M438 160h11v11h-11z M482 160h11v11h-11z M438 171h11v11h-11z M482 171h11v11h-11z M438 182h11v11h-11z M482 182h11v11h-11z M504 116h11v11h-11z M548 116h11v11h-11z M504 127h11v11h-11z M515 127h11v11h-11z M548 127h11v11h-11z M504 138h11v11h-11z M515 138h11v11h-11z M548 138h11v11h-11z M504 149h11v11h-11z M526 149h11v11h-11z M548 149h11v11h-11z M504 160h11v11h-11z M537 160h11v11h-11z M548 160h11v11h-11z M504 171h11v11h-11z M537 171h11v11h-11z M548 171h11v11h-11z M504 182h11v11h-11z M548 182h11v11h-11z"/>
+    <path fill="#60dcff" d="M75 215h11v11h-11z M86 215h11v11h-11z M97 215h11v11h-11z M108 215h11v11h-11z M64 226h11v11h-11z M64 237h11v11h-11z M64 248h11v11h-11z M64 259h11v11h-11z M64 270h11v11h-11z M75 281h11v11h-11z M86 281h11v11h-11z M97 281h11v11h-11z M108 281h11v11h-11z M130 215h11v11h-11z M130 226h11v11h-11z M130 237h11v11h-11z M130 248h11v11h-11z M130 259h11v11h-11z M130 270h11v11h-11z M130 281h11v11h-11z M141 281h11v11h-11z M152 281h11v11h-11z M163 281h11v11h-11z M174 281h11v11h-11z M196 215h11v11h-11z M207 215h11v11h-11z M218 215h11v11h-11z M229 215h11v11h-11z M240 215h11v11h-11z M218 226h11v11h-11z M218 237h11v11h-11z M218 248h11v11h-11z M218 259h11v11h-11z M218 270h11v11h-11z M196 281h11v11h-11z M207 281h11v11h-11z M218 281h11v11h-11z M229 281h11v11h-11z M240 281h11v11h-11z"/>
+    <path d="M274 281h33v11h-33z" fill="#60dcff"/>
+  </g>
+  <text x="64" y="338" fill="#b4c8db" font-family="sans-serif" font-size="27">Pixel art for your terminal.</text>
+  <g font-family="monospace" font-size="15" letter-spacing="1">
+    <text x="64" y="387" fill="#8fa9bf">C++17</text>
+    <path d="M141 375v14M249 375v14" stroke="#355168"/>
+    <text x="161" y="387" fill="#8fa9bf">KITTY</text>
+    <text x="269" y="387" fill="#8fa9bf">ANSI TRUECOLOR</text>
+  </g>
+  <!-- Terminal viewport brackets frame the unmodified, integer-scaled X4 sprite. -->
+  <path d="M824 112V88h24m336 0h24v24M824 300v24h24m336 0h24v-24" fill="none" stroke="#3c7a99" stroke-width="2"/>
+  <path d="M792 164h58m-42 16h26m338 72h48m-26 16h42" stroke="#286082" stroke-width="2"/>
+  <image x="894" y="42" width="240" height="336" style="image-rendering:pixelated" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAA4CAYAAACPKLr2AAAFYklEQVR4nM2ZL3TiSBjAf7m3YuTIrAMX3OBSl3Wsa9Uii6tEUoc7JBJXJKuurriLW1zjGldOXeTIcTmRJiQhAULSffe910dn0sz8+s18f4H/uVgAcRy3WuRu8lhY4K+nP61WC36IZVntAe8mj/HD/RiAMAzxdwHQDWRrwDxcXlbrDdAe0rIs/rj25bvJY+y56mg+DEOqoK+VL21edhznaC494q7kag2eki4hW93B/refhRenHyfr74LOjKS1BqXTw/YU0umx3LRd7Viu1mD/289YOj2ELZl7hrkvMJFGh3ve//7RmR/s5A6GYdjFMpXSCeAmUoVx//skngy+xv8M+vE/g348GXy9OhK0BjSRLnwCrGZTtve3zDEAjFdbJoOvcdmoPhdQB+hwX4DT4R50wIyAtftAsFowx+A83AKJQTWFbOWoAfTu+TCQKvt1RsACxWy14BaIdjtsN4SFD/y4eP12fnD4GJuxzsZiI5FLB73wk3EUYmwH4wls1yXa7ZJ53/D+8nTW0ttbsR1huy6262ZjvfCZ3o5YzaYAKNtmqzV64SM3QeMtPiXUjeQeAEd5eK5CKMX2PonbwjeI6HK3dDVg/9vPGDNCz0Vh/lklltuLtixGMoM1QYBr9o3g4Eoj6Q8fY6TC9lQSPeZ7BB6ILUKp7O8W8yUA01sPoRRTYPnssxO9i/dqdcQm0tyrPdNx4kIwI0YLnTwLAuYI5giWz37hvbfXXxeHwtZuZh0k8VjYIOmhc6lW6qhn8ymQaO/p7d9GcfoqN9MffhRJMsliUkkdtWfWGRQk2rwKrk1Nkoc8EAYgFUIvcc2+8Pe+vQRolOm0LpoyyFSqNJp/7PQapWOdlJ2D4U1s7GJtInsPCFsCMLYDNpHKcsUmkJ3lgyIKMZ5AzjxWsyl6vyo8H9tBAiy2jdfuPJLMCFjNpkS7BXDIFaPdAjnz0PtVo3vY2s2ckjQNW0e9wnyTVkknvZn0HhpPIDcB2Z2M7OTTjhLtLXyUbeO5CsdxWK03eK6qrQIty+pGg2+vv6zB8CYWG9BjdchuSPJA4ZOkYGYEBDiOk9UxjuPgOA53k8e4CrKzO/j2+ssqWzOA7boYTxy0SbHJtFpvThZdnd3BJIEYYe97CCML7kWEAsESoyEIIAyWADw8TAva/FTAc2LwEPgYPBzlAZe1SDo54v73SYwdIedJcmAinWkvEzvi7fWXJfABCAM/M5ZTrZLWVtz/PomNJ1i7D0DiB9kc7mKaQGBHALy/PFmD4U22oaO8erjWsbgKDrKiCTMCHSCXCXBi0SYDPbf+VYDlujY91jxAPq3XYwWQuZ5ot0NsZAL5eroD1ggwBUsbRkCWAJiRD1SXk6mWUxEbmWU9evd8EvLiZCFNq/JwWQKQblxT676/PFnCN4lmc3DClkj39jhlK8lZwLRAKsOl7V/p9BBb7+Sden95skQUFuDK/+BVgCkcUFjsnHMty2B4Exu8ymfntFgLmIfLZ8mQhKpyy+2z5CpH3QSuTntHPcUaLVYC5rX3W+TEXq1DXbkwykud9qqannVSD6iD5OcDomqxdK5JCl9uep6To2ymP3yM04Bu8HKQSeeg7KQbSW6t8lydHEWSsvUKWyYwaSe1fF90cDIa1LoYqbJCv26to0hSBTe2A+7VHvv2/rDohXAn5QNOOj2mY5Ivgyp8YgZYttwULv+FYeYPzxxLWdIrUxjn9tpEKossZchKIyk75uJDlUFeor201Sbws5/i3d5nCW5+jxTyC5z2e3VRo+nRVt7Dj2PW4R5Jr/K92prERJoNqjBubLUfkpaltaDU+1MLoKdmh4t5LoK0MYyGYlm/ZZt28h/O8PcH0Ah8OgAAAABJRU5ErkJggg=="/>
+  <g font-family="monospace" font-size="18">
+    <text x="870" y="398" fill="#60dcff">$</text>
+    <text x="894" y="398" fill="#a9c4d9">megaman-cli X_1</text>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="419" rx="16" fill="none" stroke="#294158"/>
+</svg>

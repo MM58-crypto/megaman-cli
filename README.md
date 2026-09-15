@@ -1,3 +1,5 @@
+![Mega Man CLI — pixel art for your terminal, featuring Mega Man X](docs/images/banner.png)
+
 # Mega Man CLI
 
 Display Mega Man sprites as compact, sharp pixel art in Kitty, with ANSI truecolor
@@ -199,6 +201,9 @@ falling back to unrelated assets.
 The collection contains **29 native-resolution PNGs**. The 12 legacy filenames
 now hold original game frames rather than enlarged, anti-aliased artwork.
 **Falcon Armor is from Mega Man X5, not X4.**
+
+The README banner uses the `X_1` victory pose credited below; its editable source
+is [`docs/images/banner.svg`](docs/images/banner.svg).
 
 | Game / character | CLI names |
 | --- | --- |
