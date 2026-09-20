@@ -2,30 +2,17 @@
 
 # Mega Man CLI
 
-Display Mega Man sprites as compact, sharp pixel art in Kitty, with ANSI truecolor
+Display sprite pixel art as compact, sharp images in Kitty, with ANSI truecolor
 text output for other UTF-8 terminals. Written in C++17; uses libpng to decode the
 images. No external image viewer, Python, or network connection is needed at runtime.
 
 Running the command without arguments prints a random sprite and exits—there is
 no interactive menu, so it can be used in a shell startup file.
 
-## Terminal preview
-
-A few of the included poses, captured from the CLI's Kitty graphics output and
-placed on a solid dark background. Your terminal's font size and background
-affect the final appearance; other terminals use ANSI half-blocks instead.
-
-| Black Zero — saber slash | X — charged shot | Falcon Armor X — flight |
-| :---: | :---: | :---: |
-| ![Black Zero swinging a green energy saber](docs/images/x4_black_zero_saber.png) | ![X firing a charged shot through a golden energy ring](docs/images/X_shoot_charged_armor.png) | ![Falcon Armor X flying with a blue energy trail](docs/images/x5_falcon_flight.png) |
-
-Try these poses in your terminal:
-
-```sh
-./build/megaman-cli x4_black_zero_saber --no-title
-./build/megaman-cli X_shoot_charged_armor --no-title
-./build/megaman-cli x5_falcon_flight --no-title
-```
+> **No sprite artwork is included.** This repository contains only the renderer.
+> Mega Man graphics are copyrighted by Capcom and are not redistributed here.
+> Point the command at a directory of your own PNGs with `--sprites-dir` or
+> `MEGAMAN_SPRITES_DIR`. See [Sprite artwork](#sprite-artwork).
 
 ## Build
 
@@ -44,13 +31,22 @@ On Debian/Ubuntu:
 sudo apt install build-essential cmake libpng-dev
 ```
 
-Build and run from this directory:
+Build from this directory:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
-./build/megaman-cli
 ```
+
+Then run it against a directory of PNGs:
+
+```sh
+./build/megaman-cli --sprites-dir /path/to/pngs
+```
+
+Without sprites the command exits with an error explaining how to supply them;
+the build itself needs no artwork. If you place PNGs in `mm-sprites/pngs/`, that
+directory is found automatically and is installed along with the executable.
 
 Optional renderer edge-case checks (requires Python 3, standard library only):
 
@@ -63,6 +59,9 @@ pixel fidelity, palette-preserving reduction, whole-number enlargement, thin
 outlines, transparency, terminal fit, odd image heights, and corrupt PNG input.
 
 ## Usage
+
+The sprite names below are examples; use `--list` to see whatever names your own
+PNG directory provides.
 
 ```sh
 ./build/megaman-cli                         # Random sprite
@@ -142,12 +141,13 @@ Install under your account; this does not edit terminal or shell configuration:
 cmake --install build --prefix "$HOME/.local"
 ```
 
-This installs the executable to `~/.local/bin/megaman-cli`, PNGs to
-`~/.local/share/megaman-cli/sprites`, and this file with its asset credits to
-`~/.local/share/doc/megaman-cli/README.md`. Ensure `~/.local/bin` is on `PATH`.
-The installed command finds its assets independently of the working directory.
-Keep the installed share directory alongside the executable when relocating it;
-copying the executable alone does not bundle the PNGs.
+This installs the executable to `~/.local/bin/megaman-cli`, and `LICENSE` plus
+this file to `~/.local/share/doc/megaman-cli/`. Ensure `~/.local/bin` is on
+`PATH`. If your checkout has a local `mm-sprites/pngs/`, those PNGs are also
+copied to `~/.local/share/megaman-cli/sprites`, and the installed command then
+finds them independently of the working directory. Keep that share directory
+alongside the executable when relocating it; copying the executable alone does
+not bring the PNGs. Otherwise set `MEGAMAN_SPRITES_DIR` to your own directory.
 
 To display a sprite when opening Kitty (or another terminal), put the command in
 its interactive shell's startup file—not directly in `kitty.conf`.
@@ -174,13 +174,12 @@ No startup files are modified by the build or installation.
 
 ## Add your own sprites
 
-Put individual PNG poses, not whole sprite sheets, in `mm-sprites/pngs/` during
-development and rerun installation to copy additions into an installed setup.
-The filename stem becomes the CLI name. Transparent, tightly cropped,
-native-resolution pixel art gives the best results. The legacy enlarged,
-anti-aliased PNGs have been replaced in place with native game frames; their CLI
-names still work. The old shell-style files outside `pngs/` are not executed or
-used by the renderer.
+The renderer has no built-in sprites and no hardcoded names: it simply displays
+whatever PNGs it is pointed at. Put individual PNG poses, not whole sprite
+sheets, in `mm-sprites/pngs/` and rerun installation to copy them into an
+installed setup. That directory is git-ignored, so your local artwork is never
+committed. The filename stem becomes the CLI name. Transparent, tightly cropped,
+native-resolution pixel art gives the best results.
 
 You can also use any PNG directory without rebuilding:
 
@@ -196,13 +195,21 @@ configured installation path, the configured source tree, and finally
 authoritative: missing or empty directories report an error rather than silently
 falling back to unrelated assets.
 
-## Sprite collection and credits
+## Sprite artwork
 
-The collection contains **29 native-resolution PNGs**. The 12 legacy filenames
-now hold original game frames rather than enlarged, anti-aliased artwork.
-**Falcon Armor is from Mega Man X5, not X4.**
+**No artwork is distributed with this repository.** Mega Man characters and game
+graphics are copyrighted by Capcom, and none of the archives below grant
+redistribution rights, so the PNGs are git-ignored rather than committed. The
+[LICENSE](LICENSE) covers the renderer only.
 
-The README banner uses the `X_1` victory pose credited below; its editable source
+What follows is provenance for the 29-sprite set this renderer was developed
+against, kept so the sources stay documented and credited. Use it to assemble an
+equivalent set yourself from the linked sheets, under whatever terms those
+sources and Capcom allow for your use. **Falcon Armor is from Mega Man X5, not
+X4.**
+
+The one exception is the README banner, which is kept in the repository for
+presentation. It uses the `X_1` victory pose credited below; its editable source
 is [`docs/images/banner.svg`](docs/images/banner.svg).
 
 | Game / character | CLI names |
@@ -299,6 +306,16 @@ Capcom. Archive/ripper attribution is not permission from the copyright holder.
 Sprite Database states private/non-commercial use; Sprites INC asserts copyright
 and no explicit open redistribution license was found. Do not assume these
 assets are public domain, openly licensed, or covered by a software license.
-Check permissions before publishing or redistributing a package containing them.
+This is why no artwork ships here, and why supplying your own does not place it
+under this project's license. Check permissions before publishing or
+redistributing a package containing them.
+
+## License
+
+The software—`main.cpp`, `CMakeLists.txt`, `tests/`, and the documentation—is
+released under the [MIT License](LICENSE).
+
+Sprite artwork is explicitly **not** covered by that license and is not included
+in this repository. See [Sprite artwork](#sprite-artwork).
 
 Inspired by [pokego](https://github.com/rubiin/pokego).

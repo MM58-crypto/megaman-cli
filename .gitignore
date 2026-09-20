@@ -1,2 +1,10 @@
 /build/
 CODE_WALKTHROUGH.md
+
+# Sprite artwork is Capcom's and is not redistributed with this repository.
+# Supply your own PNGs locally; see the "Sprite artwork" section of README.md.
+# The README banner is kept as an exception.
+/mm-sprites/
+/docs/images/*
+!/docs/images/banner.png
+!/docs/images/banner.svg

@@ -21,12 +21,19 @@ target_compile_definitions(megaman-cli PRIVATE
     MEGAMAN_RELATIVE_SPRITE_DIR="${MEGAMAN_RELATIVE_SPRITE_DIR}")
 
 install(TARGETS megaman-cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-install(DIRECTORY mm-sprites/pngs/
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/megaman-cli/sprites"
-    FILES_MATCHING PATTERN "*.png" PATTERN "*.PNG")
-install(FILES README.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
-install(DIRECTORY docs/images/ DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs/images"
-    FILES_MATCHING PATTERN "*.png")
+install(FILES LICENSE README.md DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(FILES docs/images/banner.png
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs/images")
+
+# Sprite artwork is not part of this repository: see the "Sprite artwork"
+# section of README.md. A local mm-sprites/pngs/ is installed when present, so
+# a personal checkout still ships its own assets; without one the executable
+# relies on --sprites-dir or MEGAMAN_SPRITES_DIR at runtime.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mm-sprites/pngs")
+    install(DIRECTORY mm-sprites/pngs/
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/megaman-cli/sprites"
+        FILES_MATCHING PATTERN "*.png" PATTERN "*.PNG")
+endif()
 
 include(CTest)
 if(BUILD_TESTING)
