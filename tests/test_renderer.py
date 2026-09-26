@@ -157,7 +157,20 @@ class RendererEdges(unittest.TestCase):
         data = base64.b64decode("".join(data for _, data in chunks), validate=True)
         width, height = int(headers[0]["s"]), int(headers[0]["v"])
         self.assertEqual(len(data), width * height * 4)
-        return width, height, data
+        # Placement is pinned to whole cells so Kitty rescales the image on font zoom.
+        columns, rows = int(headers[0]["c"]), int(headers[0]["r"])
+        self.assertEqual((width, height), (columns * 10, rows * 20))
+        # Trim the transparent cell padding added on the right and bottom edges.
+        pixels = [data[(y * width + x) * 4:(y * width + x + 1) * 4]
+                  for y in range(height) for x in range(width)]
+        opaque = [(x, y) for y in range(height) for x in range(width)
+                  if pixels[y * width + x][3]]
+        right = max(x for x, _ in opaque) + 1
+        bottom = max(y for _, y in opaque) + 1
+        self.assertEqual((right + 9) // 10, columns)
+        self.assertEqual((bottom + 19) // 20, rows)
+        trimmed = b"".join(data[y * width * 4:(y * width + right) * 4] for y in range(bottom))
+        return right, bottom, trimmed
 
     def test_graphics_limits_include_outline_without_blending(self):
         red = (255, 0, 0, 255)

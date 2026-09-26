@@ -372,15 +372,22 @@ void appendColor(std::string &output, int color, bool foreground, int &previous)
     }
 }
 
-void renderKitty(const std::vector<int> &pixels, int width, int height, int cellHeight) {
+void renderKitty(const std::vector<int> &pixels, int width, int height, int cellWidth,
+                 int cellHeight) {
+    const int columns = (width + cellWidth - 1) / cellWidth;
     const int rows = (height + cellHeight - 1) / cellHeight;
+    // Pad with transparency to whole cells and pin the placement with c/r: Kitty then
+    // scales the image with the font on zoom instead of keeping a fixed pixel size.
+    const int paddedWidth = columns * cellWidth;
+    const int paddedHeight = rows * cellHeight;
     // Reserve space first so an image near the bottom is not clipped on placement.
     std::cout << "\033[0m\r";
     for (int row = 0; row < rows; ++row) {
         std::cout << '\n';
     }
     std::cout << "\033[" << rows << "A"
-              << "\033_Ga=T,f=32,q=2,C=1,s=" << width << ",v=" << height << ',';
+              << "\033_Ga=T,f=32,q=2,C=1,s=" << paddedWidth << ",v=" << paddedHeight
+              << ",c=" << columns << ",r=" << rows << ',';
 
     // Stream RGBA as base64 in protocol-sized chunks; no expanded byte copy.
     constexpr char alphabet[] =
@@ -404,15 +411,18 @@ void renderKitty(const std::vector<int> &pixels, int width, int height, int cell
     };
     std::uint32_t buffer = 0;
     int bits = 0;
-    for (int color : pixels) {
-        const std::uint32_t rgba = color < 0 ? 0 :
-            (static_cast<std::uint32_t>(color) << 8) | 255;
-        for (int shift : {24, 16, 8, 0}) {
-            buffer = (buffer << 8) | ((rgba >> shift) & 255);
-            bits += 8;
-            while (bits >= 6) {
-                bits -= 6;
-                append(alphabet[(buffer >> bits) & 63]);
+    for (int y = 0; y < paddedHeight; ++y) {
+        for (int x = 0; x < paddedWidth; ++x) {
+            const int color = x < width && y < height ? pixels[y * width + x] : -1;
+            const std::uint32_t rgba = color < 0 ? 0 :
+                (static_cast<std::uint32_t>(color) << 8) | 255;
+            for (int shift : {24, 16, 8, 0}) {
+                buffer = (buffer << 8) | ((rgba >> shift) & 255);
+                bits += 8;
+                while (bits >= 6) {
+                    bits -= 6;
+                    append(alphabet[(buffer >> bits) & 63]);
+                }
             }
         }
     }
@@ -454,7 +464,7 @@ void render(const Image &image, const Bounds &bounds, const Size &size, bool out
         std::replace(pixels.begin(), pixels.end(), -2, 0);
     }
     if (terminal.graphics) {
-        renderKitty(pixels, width, height, terminal.cellHeight);
+        renderKitty(pixels, width, height, terminal.cellWidth, terminal.cellHeight);
         return;
     }
     std::string line;

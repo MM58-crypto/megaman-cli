@@ -97,6 +97,8 @@ half the ANSI width and height without discarding source pixels.** Each source
 pixel becomes a smaller, equally sized square of device pixels. The image is
 scaled with nearest-neighbor sampling before transmission, so Kitty displays it
 at its exact device-pixel size without smoothing.
+The image is anchored to a fixed block of text cells, so zooming Kitty's font in
+or out resizes the sprite along with the surrounding text.
 
 Automatic graphics output requires `TERM=xterm-kitty`, stdout attached to a
 terminal, and usable pixel dimensions from that terminal. Other terminals,
